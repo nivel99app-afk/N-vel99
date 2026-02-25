@@ -1,5 +1,5 @@
 import express from 'express';
-import pool from './src/db.js';
+import pool, { initDb } from './src/db.js';
 import { randomUUID } from 'crypto';
 import { MercadoPagoConfig, Preference, Payment } from 'mercadopago';
 
@@ -13,6 +13,7 @@ app.post('/api/auth/register', async (req, res) => {
   const { nome, email, senha, atributos, score_geral, nivel } = req.body;
   
   try {
+    await initDb();
     const userId = randomUUID();
     
     await pool.query(`
@@ -32,7 +33,7 @@ app.post('/api/auth/register', async (req, res) => {
     if (error.code === '23505') { // PostgreSQL unique violation code
       res.status(400).json({ error: 'Email já está em uso' });
     } else {
-      console.error(error);
+      console.error('Register error:', error);
       res.status(500).json({ error: 'Erro ao criar conta' });
     }
   }
@@ -42,6 +43,7 @@ app.post('/api/auth/login', async (req, res) => {
   const { email, senha } = req.body;
   
   try {
+    await initDb();
     const userResult = await pool.query('SELECT id, nome, email, premium, nivel, score_geral FROM users WHERE email = $1 AND senha = $2', [email, senha]);
     const user = userResult.rows[0];
     
@@ -53,7 +55,7 @@ app.post('/api/auth/login', async (req, res) => {
       res.status(401).json({ error: 'Email ou senha inválidos' });
     }
   } catch (error) {
-    console.error(error);
+    console.error('Login error:', error);
     res.status(500).json({ error: 'Erro ao fazer login' });
   }
 });
