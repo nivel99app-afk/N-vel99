@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { LogOut, Target, Zap, Activity, DollarSign, Brain, CheckCircle2, Lock, Info } from 'lucide-react';
+import { LogOut, Target, Zap, Activity, DollarSign, Brain, CheckCircle2, Lock, Info, Loader2 } from 'lucide-react';
 import { useAppStore } from '../store';
 import {
   Radar,
@@ -29,6 +29,8 @@ export default function Dashboard() {
   const [isRegistering, setIsRegistering] = useState(false);
   const [showSimTooltip, setShowSimTooltip] = useState(false);
   const [simAnimating, setSimAnimating] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [showSimSuccess, setShowSimSuccess] = useState(false);
 
   useEffect(() => {
     if (!user || !atributos) {
@@ -47,6 +49,7 @@ export default function Dashboard() {
       .catch(console.error);
 
     const fetchHistory = async () => {
+      setIsLoading(true);
       try {
         const res = await fetch(`/api/historico/${user.id}`);
         const data = await res.json();
@@ -87,6 +90,8 @@ export default function Dashboard() {
         }
       } catch (err) {
         console.error('Failed to fetch history', err);
+      } finally {
+        setIsLoading(false);
       }
     };
 
@@ -94,6 +99,15 @@ export default function Dashboard() {
   }, [user, atributos, navigate]);
 
   if (!user || !atributos) return null;
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-zinc-50 dark:bg-black">
+        <Loader2 className="w-12 h-12 text-green-500 animate-spin mb-4" />
+        <p className="text-zinc-500 dark:text-zinc-400 font-mono animate-pulse">Carregando seus dados...</p>
+      </div>
+    );
+  }
 
   const attrsArray = [
     { subject: 'Energia', A: Math.round(atributos.energia * 20), fullMark: 100 },
@@ -127,7 +141,9 @@ export default function Dashboard() {
   const handleSimValueChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSimValue(Number(e.target.value));
     setSimAnimating(true);
+    setShowSimSuccess(true);
     setTimeout(() => setSimAnimating(false), 500);
+    setTimeout(() => setShowSimSuccess(false), 2000);
   };
 
   return (
@@ -244,6 +260,18 @@ export default function Dashboard() {
                   >
                     {simNivel}
                   </motion.strong>
+                  <AnimatePresence>
+                    {showSimSuccess && (
+                      <motion.span 
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0 }}
+                        className="text-xs text-green-500 ml-3 font-medium bg-green-500/10 px-2 py-1 rounded-md"
+                      >
+                        Simulado!
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
                 </p>
               </div>
             </div>
@@ -283,19 +311,29 @@ export default function Dashboard() {
                   <span className="text-sm font-mono text-green-500">{Math.round((progress / 30) * 100)}%</span>
                 </div>
                 
-                <div className="grid grid-cols-5 sm:grid-cols-10 gap-2 mb-6">
+                <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-6 gap-3 mb-6 max-h-80 overflow-y-auto pr-2">
                   {Array.from({ length: 30 }).map((_, i) => (
                     <motion.div 
                       key={i} 
                       initial={false}
                       animate={{ 
                         backgroundColor: i < progress ? '#22c55e' : '',
-                        scale: i === progress - 1 && isRegistering ? [1, 1.1, 1] : 1,
-                        boxShadow: i === progress - 1 && isRegistering ? '0 0 15px rgba(34,197,94,0.6)' : 'none'
+                        borderColor: i === progress ? '#22c55e' : '',
+                        scale: i === progress - 1 && isRegistering ? [1, 1.05, 1] : 1,
                       }}
-                      className={`aspect-square rounded-lg flex items-center justify-center text-[10px] font-bold transition-colors ${i < progress ? 'bg-green-500 text-black' : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-600'}`} 
+                      className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all ${
+                        i < progress 
+                          ? 'bg-green-500 border-green-500 text-black shadow-[0_0_10px_rgba(34,197,94,0.2)]' 
+                          : i === progress
+                          ? 'bg-zinc-100 dark:bg-zinc-800/50 border-green-500/50 text-zinc-900 dark:text-white'
+                          : 'bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-400 dark:text-zinc-600'
+                      }`}
                     >
-                      {i + 1}
+                      <span className="text-[10px] uppercase tracking-wider font-bold opacity-70 mb-1">Dia</span>
+                      <span className="text-lg font-black">{i + 1}</span>
+                      {i < progress && <CheckCircle2 className="w-4 h-4 mt-1 opacity-80" />}
+                      {i === progress && <Target className="w-4 h-4 mt-1 text-green-500" />}
+                      {i > progress && <Lock className="w-3 h-3 mt-1 opacity-30" />}
                     </motion.div>
                   ))}
                 </div>
@@ -382,14 +420,15 @@ export default function Dashboard() {
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-50/50 dark:bg-black/50 backdrop-blur-[2px] z-10">
             <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-6 rounded-2xl text-center max-w-sm shadow-xl">
               <motion.div
-                animate={{ scale: [1, 1.1, 1] }}
-                transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
-                className="inline-block"
+                whileHover={{ scale: 1.1 }}
+                animate={{ y: [0, -8, 0] }}
+                transition={{ repeat: Infinity, duration: 2.5, ease: "easeInOut" }}
+                className="inline-block cursor-pointer"
+                onClick={() => navigate('/login')}
               >
-                <Lock 
-                  className="w-8 h-8 text-green-500 mx-auto mb-4 cursor-pointer" 
-                  onClick={() => navigate('/login')} 
-                />
+                <div className="w-16 h-16 bg-green-500/10 rounded-full flex items-center justify-center mb-4 mx-auto border border-green-500/20 shadow-[0_0_15px_rgba(34,197,94,0.2)]">
+                  <Lock className="w-8 h-8 text-green-500" />
+                </div>
               </motion.div>
               <h3 className="text-lg font-bold mb-2">Recurso Premium</h3>
               <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-6">
